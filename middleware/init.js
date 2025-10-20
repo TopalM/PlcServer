@@ -1,4 +1,4 @@
-// middlewares/init.js
+// middleware/init.js
 import { setupDatabaseConnection } from "../database/connection.js";
 import { dbsync } from "../database/sync.js";
 

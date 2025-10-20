@@ -1,22 +1,25 @@
-// middlewares/plcWsClient.js
+// middleware/plcWsClient.js
 import WebSocket from "ws";
 import { decryptFromServerBase64 } from "./dataCrypto.js";
 import { pickMapper } from "../models/mappers/index.js";
 import { modelFor } from "./plcModelRouter.js";
+import { setWs, setFlushTimer, setPingTimer, clearTimers, getState } from "./state.js";
 
-/** Ortak ayarlar */
+/** Ortak ayarlar (.env) */
 const { WSS_URL, JSONWEBTOKEN, SNAPSHOT_INTERVAL_MS } = process.env;
 const SAVE_EVERY_MS = Number(SNAPSHOT_INTERVAL_MS || 60_000);
 
 /** Son görülen verileri tutan tampon (her PLC adı için) */
 const lastSeen = new Map();
-/** Son yazılan dakika damgası (aynı dakikaya ikinci kez yazmamak için) */
+/** Son yazılan dakika anahtarı (aynı dakikaya ikinci kez yazmamak için) */
 const lastFlushedKey = new Map();
 
-let ws;
+/** İç durum */
 let attempts = 0;
-let flushTimer;
+let flushing = false;
+let alive = false;
 
+/** Dışa açık başlatıcı */
 export function startPlcWebsocketListener() {
   if (!WSS_URL) {
     console.error("WSS_URL boş olamaz. .env dosyasını kontrol et.");
@@ -26,17 +29,52 @@ export function startPlcWebsocketListener() {
   startFlushLoop();
 }
 
+/** Bağlan */
 function connect() {
   const url = new URL(WSS_URL);
   if (JSONWEBTOKEN) url.searchParams.set("token", JSONWEBTOKEN);
 
-  ws = new WebSocket(url.toString(), {
+  const ws = new WebSocket(url.toString(), {
     headers: JSONWEBTOKEN ? { Authorization: `Bearer ${JSONWEBTOKEN}` } : undefined,
+    perMessageDeflate: false,
+    handshakeTimeout: 10_000, // 10s
+    maxPayload: 4 * 1024 * 1024, // 4MB
   });
+
+  setWs(ws);
 
   ws.on("open", () => {
     attempts = 0;
     console.log("[PLC-WS] connected");
+    alive = true;
+
+    // Heartbeat: 20sn’de bir ping; 20sn içinde pong yoksa kapat
+    try {
+      if (getState().pingTimer) clearInterval(getState().pingTimer);
+    } catch {}
+    const pt = setInterval(() => {
+      try {
+        const { ws: curr } = getState();
+        if (!curr || curr.readyState !== WebSocket.OPEN) return;
+
+        alive = false;
+        curr.ping();
+
+        setTimeout(() => {
+          if (!alive && curr?.readyState === WebSocket.OPEN) {
+            console.warn("[PLC-WS] heartbeat timeout → terminate");
+            try {
+              curr.terminate();
+            } catch {}
+          }
+        }, 20_000);
+      } catch {}
+    }, 20_000);
+    setPingTimer(pt);
+  });
+
+  ws.on("pong", () => {
+    alive = true;
   });
 
   ws.on("message", (data) => {
@@ -71,50 +109,66 @@ function connect() {
 
   ws.on("close", (code, reason) => {
     console.warn("[PLC-WS] closed:", code, reason?.toString?.() || "");
+    // ping timer’ı temizle
+    clearTimers();
     reconnect();
   });
 
   ws.on("error", (err) => {
-    console.error("[PLC-WS] error:", err.message);
+    console.error("[PLC-WS] error:", err?.message || err);
   });
 }
 
+/** Jitter’lı exponential backoff ile yeniden bağlan */
 function reconnect() {
   attempts += 1;
-  const backoff = Math.min(30000, 1000 * Math.pow(2, attempts));
-  console.log(`[PLC-WS] reconnecting in ${backoff} ms`);
-  setTimeout(connect, backoff);
+  const base = Math.min(30_000, 1000 * Math.pow(2, attempts));
+  const jitter = Math.floor(Math.random() * 2000);
+  const wait = base + jitter;
+  console.log(`[PLC-WS] reconnecting in ${wait} ms`);
+  setTimeout(connect, wait);
 }
 
+/** Dakikalık snapshot flush döngüsü (idempotent upsert) */
 function startFlushLoop() {
-  if (flushTimer) clearInterval(flushTimer);
-  flushTimer = setInterval(async () => {
+  // Eski timer varsa temizle
+  try {
+    if (getState().flushTimer) clearInterval(getState().flushTimer);
+  } catch {}
+
+  const t = setInterval(async () => {
+    if (flushing) return;
     if (lastSeen.size === 0) return;
 
+    flushing = true;
     const entries = Array.from(lastSeen.entries());
+
     for (const [plcName, { DataTime, body, Model }] of entries) {
       try {
-        // Dakika başına yuvarla: (örn. 13:43:08 → 13:43:00)
+        // Dakikaya yuvarla: (örn. 13:43:08 → 13:43:00)
         const minuteKey = new Date(DataTime);
         minuteKey.setSeconds(0, 0);
 
         const key = `${plcName}|${minuteKey.toISOString()}`;
-        if (lastFlushedKey.get(plcName) === key) {
-          continue; // aynı dakikaya ikinci kez yazma
-        }
+        if (lastFlushedKey.get(plcName) === key) continue; // aynı dakikaya ikinci kez yazma
 
-        // Kayıt objesi
-        const doc = new Model({
-          DataTime: minuteKey, // dakikalık snapshot
-          ...body,
-        });
+        // Idempotent: Upsert
+        await Model.updateOne(
+          { DataTime: minuteKey }, // aynı dakikaya tek kayıt
+          { $set: { DataTime: minuteKey, ...body } },
+          { upsert: true }
+        );
 
-        await doc.save();
         lastFlushedKey.set(plcName, key);
+        // İstersen debug aç:
         // console.log(`[FLUSH] ${plcName} @ ${minuteKey.toISOString()}`);
       } catch (e) {
         console.error(`[FLUSH ERR] ${plcName}:`, e?.message || e);
       }
     }
+
+    flushing = false;
   }, SAVE_EVERY_MS);
+
+  setFlushTimer(t);
 }
