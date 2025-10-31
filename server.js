@@ -26,32 +26,37 @@ import { startInfrastructure } from "./middleware/init.js";
 import { startPlcWebsocketListener } from "./middleware/plcWsClient.js";
 import { getState, clearTimers } from "./middleware/state.js";
 
-/**
- * Sadece tetikleme
- */
+// Cron register (dosya yolunu senin yapına göre ayarla)
+import { registerCronJobs } from "./middleware/cronJobs.js";
+
+// Tek instance’ta çalıştır
+const ENABLE_CRONS = process.env.ENABLE_CRONS === "true";
+
 (async () => {
   try {
-    await startInfrastructure(); // DB → Modelleri yükle
-    startPlcWebsocketListener(); // WS dinleyiciyi başlat
+    await startInfrastructure();
+
+    if (ENABLE_CRONS) {
+      console.log("[Init] Cron görevleri kaydediliyor…");
+      registerCronJobs();
+      console.log("[Init] Cron görevleri aktif.");
+    } else {
+      console.log("[Init] ENABLE_CRONS=false → Cron görevleri devre dışı.");
+    }
+
+    startPlcWebsocketListener();
   } catch (e) {
     console.error("[Init] başlangıç hatası:", e?.message || e);
     process.exit(1);
   }
 })();
 
-/**
- * Graceful shutdown
- */
 async function shutdown() {
   console.log("\nShutting down...");
   try {
     const { ws } = getState();
-
-    // timer’ları temizle
     clearTimers();
-
-    // WS açık ise kibarca kapat (1s ver)
-    if (ws && ws.readyState === 1 /* OPEN */) {
+    if (ws && ws.readyState === 1) {
       try {
         ws.close(1000, "SIGTERM");
       } catch {}

@@ -50,6 +50,6 @@ export function pickMapper(plcName) {
   if (plcName === "PLC_NaturalGas") return mapGas;
   if (plcName === "PLC_Water") return mapWater;
   // PLC_1..PLC_8
-  if (/^PLC_\d$/.test(plcName)) return mapReactor;
+  if (/^PLC_\d+$/.test(plcName)) return mapReactor;
   return (p) => ({ ...p }); // default
 }

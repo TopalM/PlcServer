@@ -18,7 +18,7 @@ function maskMongoUri(uri) {
 }
 
 export async function setupDatabaseConnection() {
-  const mongoURI = process.env.MONGODB_URI || "mongodb://localhost:27017/PlcServerDB";
+  const mongoURI = process.env.MONGODB_URI_PLC || "mongodb://localhost:27017/PlcServerDB";
   let retries = Number(process.env.MONGO_RETRIES || 5);
 
   mongoose.connection.on("connected", () => {
