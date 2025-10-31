@@ -1,14 +1,13 @@
-// middlewares/dataCrypto.js
 import { createDecipheriv, createHash } from "node:crypto";
 
 function deriveKeyIv() {
   const key = createHash("sha256")
     .update(String(process.env.AES_SECRET_KEY || "plastifay-default-key"))
-    .digest(); // 32B
+    .digest();
   const iv = createHash("sha1")
     .update(String(process.env.AES_IV || "plastifay-default-iv"))
     .digest()
-    .subarray(0, 16); // 16B
+    .subarray(0, 16);
   return { key, iv };
 }
 

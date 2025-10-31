@@ -1,4 +1,3 @@
-//database/sync.js
 import mongoose from "mongoose";
 
 import Reactor1Factory from "../models/1_Reactor1DataModel.js";
@@ -18,13 +17,8 @@ import NaturalGasFactory from "../models/14_NaturalGasCounterDataModel.js";
 import ElectricFactory from "../models/15_ElectricCounterDataModel.js";
 import WaterFactory from "../models/16_WaterCounterDataModel.js";
 
-// Factory veya doğrudan model gelebilir; ikisini de destekle
 function ensureModel(item) {
-  // factory ise (function) çağır: mongoose’ı "plcConn" gibi kullanıyoruz
-  if (typeof item === "function") {
-    return item(mongoose);
-  }
-  // zaten model ise direkt dön
+  if (typeof item === "function") return item(mongoose);
   return item;
 }
 
@@ -52,11 +46,8 @@ export async function dbsync() {
     const loaded = [];
     for (const it of items) {
       const model = ensureModel(it);
-      if (model?.modelName) {
-        loaded.push(model.modelName);
-      } else {
-        console.warn("Model yüklenemedi (factory mi hatalı?):", it?.name || "(anon)");
-      }
+      if (model?.modelName) loaded.push(model.modelName);
+      else console.warn("Model yüklenemedi (factory mi hatalı?):", it?.name || "(anon)");
     }
 
     console.log(loaded.length ? `Tüm modeller başarıyla yüklendi: ${loaded.join(", ")}` : "Hiç model yüklenemedi!");

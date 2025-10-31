@@ -1,9 +1,7 @@
-// models/mappers/index.js
-
-const toNum = (v) => (typeof v === "boolean" ? (v ? 1 : 0) : v ?? null);
+/** Tür yardımcıları */
 const boolTo01 = (v) => (v === true ? 1 : v === false ? 0 : v);
 
-/** TankFarm: bazı vana/priz alanları boolean geliyor → 0/1'e çevir */
+/** TankFarm: bazı alanlar boolean geliyor → 0/1 */
 export function mapTankFarm(payload) {
   const out = { ...payload };
   [
@@ -25,22 +23,15 @@ export function mapTankFarm(payload) {
   return out;
 }
 
-/** Scrubber ve FilterPress: veriler zaten numeric; dokunmadan geçiyoruz */
 export const mapScrubber = (p) => ({ ...p });
 export const mapFilterPress = (p) => ({ ...p });
-
-/** Yardımcı Tesisler, Elektrik, Doğal Gaz, Su: doğrudan geçir */
 export const mapAux = (p) => ({ ...p });
 export const mapElectric = (p) => ({ ...p });
 export const mapGas = (p) => ({ ...p });
 export const mapWater = (p) => ({ ...p });
-
-/** Reaktörler: isimler uyumlu; direkt geçir */
 export const mapReactor = (p) => ({ ...p });
 
-/**
- * Kaynak adına göre mapper seçer.
- */
+/** Kaynak adına göre mapper */
 export function pickMapper(plcName) {
   if (plcName === "PLC_TankFarm") return mapTankFarm;
   if (plcName === "PLC_Scrubber1" || plcName === "PLC_Scrubber2") return mapScrubber;
@@ -49,7 +40,6 @@ export function pickMapper(plcName) {
   if (plcName === "PLC_Electric") return mapElectric;
   if (plcName === "PLC_NaturalGas") return mapGas;
   if (plcName === "PLC_Water") return mapWater;
-  // PLC_1..PLC_8
-  if (/^PLC_\d+$/.test(plcName)) return mapReactor;
-  return (p) => ({ ...p }); // default
+  if (/^PLC_\d$/.test(plcName)) return mapReactor; // PLC_1..PLC_8
+  return (p) => ({ ...p });
 }

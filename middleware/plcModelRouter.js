@@ -1,9 +1,5 @@
-// middlewares/plcModelRouter.js
 import mongoose from "mongoose";
 
-/**
- * WS kaynak adını Mongoose modeline eşler.
- */
 export function modelFor(plcName) {
   const m = mongoose.models;
 

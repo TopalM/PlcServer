@@ -1,4 +1,3 @@
-// services/sendMailService.js
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 dotenv.config();
@@ -25,7 +24,6 @@ const sendMailServices = async (sendEmail, subject, template, attachments = []) 
 
     const info = await transporter.sendMail(mailOptions);
     console.log("Email sent successfully: %s", info.messageId);
-    console.log("Preview URL: %s", nodemailer.getTestMessageUrl(info));
     return true;
   } catch (error) {
     console.error("Error sending email:", error);

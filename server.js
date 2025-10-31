@@ -25,11 +25,9 @@ process.on("unhandledRejection", (e) => {
 import { startInfrastructure } from "./middleware/init.js";
 import { startPlcWebsocketListener } from "./middleware/plcWsClient.js";
 import { getState, clearTimers } from "./middleware/state.js";
-
-// Cron register (dosya yolunu senin yapına göre ayarla)
 import { registerCronJobs } from "./middleware/cronJobs.js";
 
-// Tek instance’ta çalıştır
+// Tek instance’ta çalıştırmak için opsiyonel bayrak
 const ENABLE_CRONS = process.env.ENABLE_CRONS === "true";
 
 (async () => {

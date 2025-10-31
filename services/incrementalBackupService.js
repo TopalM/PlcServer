@@ -1,4 +1,3 @@
-// services/incrementalBackupService.js
 import { execFile } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -28,12 +27,12 @@ const BACKUP_DAY_OFFSET = Number.isFinite(parseInt(process.env.BACKUP_DAY_OFFSET
 // E-posta alıcısı: mevcut env’lerden biri varsa onu kullan
 const MAIL_TO =
   (process.env.SHIPMENT_REPORT_TO && process.env.SHIPMENT_REPORT_TO.trim()) ||
-  (process.env.MAIN_ACCOUNT_MAIL_ADRESS && process.env.MAIN_ACCOUNT_MAIL_ADRESS.trim()) || // yazımdaki 'ADRESS' sizde böyle
+  (process.env.MAIN_ACCOUNT_MAIL_ADRESS && process.env.MAIN_ACCOUNT_MAIL_ADRESS.trim()) ||
   (process.env.ACCOUNT_MAIL_ADDRESS && process.env.ACCOUNT_MAIL_ADDRESS.trim()) ||
   (process.env.MAIL_ADDRESS && process.env.MAIL_ADDRESS.trim()) ||
   "Mustafa.Topal@Plastifay.com.tr";
 
-// Artımlı alınacak koleksiyonlar (env yoksa sabit liste)
+// Artımlı alınacak koleksiyonlar (env varsa onu kullanır)
 const COLLECTIONS = process.env.BACKUP_COLLECTIONS
   ? process.env.BACKUP_COLLECTIONS.split(",")
       .map((s) => s.trim())
@@ -57,10 +56,8 @@ const COLLECTIONS = process.env.BACKUP_COLLECTIONS
       "waterCounterData",
     ];
 
-// URI’dan DB adını çıkar (yolun son segmenti)
 function dbNameFromUri(uri) {
   try {
-    // mongodb://user:pass@host:27017/PlcServerDB?authSource=admin
     const afterSlash = uri.split("://")[1].split("/")[1] || "";
     return afterSlash.split("?")[0] || "unknownDB";
   } catch {
@@ -73,10 +70,11 @@ function istDayWindowUTC(offsetDays = BACKUP_DAY_OFFSET) {
   const target = dayjs().tz("Europe/Istanbul").subtract(offsetDays, "day");
   const startIST = target.startOf("day");
   const endIST = startIST.add(1, "day");
-  const startUTC = startIST.utc().toDate().toISOString();
-  const endUTC = endIST.utc().toDate().toISOString();
-  const dayLabel = startIST.format("YYYY-MM-DD");
-  return { startUTC, endUTC, dayLabel };
+  return {
+    startUTC: startIST.utc().toDate().toISOString(),
+    endUTC: endIST.utc().toDate().toISOString(),
+    dayLabel: startIST.format("YYYY-MM-DD"),
+  };
 }
 
 function execFilep(cmd, args, opts = {}) {

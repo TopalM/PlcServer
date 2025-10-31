@@ -5,7 +5,7 @@ import { backupIncrementalMongoAndUpload } from "../services/incrementalBackupSe
 export function registerCronJobs() {
   const tz = "Europe/Istanbul";
 
-  // Her gece 01:00'da çalışsın
+  // Her gece 01:00'da çalışsın; dünün 00:00–24:00 (IST) aralığını alır
   cron.schedule(
     "0 1 * * *",
     async () => {
