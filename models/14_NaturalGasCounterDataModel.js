@@ -1,7 +1,5 @@
-// models/14_NaturalGasCounterDataModel.js
 import mongoose from "mongoose";
 
-/** ---------- Helpers ---------- **/
 const toNumberOrNaN = (v) => {
   if (v == null) return NaN;
   if (typeof v === "number") return v;
@@ -13,7 +11,6 @@ const toNumberOrNaN = (v) => {
   }
   return NaN;
 };
-
 const clampToRangeOrDrop = (n, min, max) => {
   const x = toNumberOrNaN(n);
   if (!Number.isFinite(x)) return undefined;
@@ -21,24 +18,21 @@ const clampToRangeOrDrop = (n, min, max) => {
   if (max != null && x > max) return undefined;
   return x;
 };
-
-const sanitizeRound = (places, min, max) => (v) => {
-  const inRange = clampToRangeOrDrop(v, min, max);
-  if (inRange == null) return undefined;
-  const f = 10 ** places;
-  return Math.round(inRange * f) / f;
+const sanitizeRound = (p, min, max) => (v) => {
+  const r = clampToRangeOrDrop(v, min, max);
+  if (r == null) return undefined;
+  const f = 10 ** p;
+  return Math.round(r * f) / f;
 };
-
-// Monotonic counters helper: if current < last, keep last
 const monotonicFix = (curr, last) => {
-  const c = toNumberOrNaN(curr);
-  const l = toNumberOrNaN(last);
-  if (Number.isFinite(c) && Number.isFinite(l) && c < l) return l;
+  const c = toNumberOrNaN(curr),
+    l = toNumberOrNaN(last);
+  if (Number.isFinite(c) && Number.isFinite(l) && c < l) return last;
   return curr;
 };
 
 const PRECISION = {
-  Sicak_Su_Basinc_Bar: 3,
+  /* … aynı */ Sicak_Su_Basinc_Bar: 3,
   Sicak_Su_Sicaklik_DegC: 1,
   Sicak_Su_DonusumFaktoru: 2,
   Sicak_Su_Z_ZbOrani1_K: 2,
@@ -50,7 +44,6 @@ const PRECISION = {
   Sicak_Su_DuzeltilmisHc1_Sm3: 0,
   Sicak_Su_HataDmemisHc1_m3: 0,
   Sicak_Su_HataDmisHc1_Sm3: 0,
-
   Bono_Basinc_Bar: 3,
   Bono_Sicaklik_DegC: 1,
   Bono_DonusumFaktoru: 2,
@@ -63,7 +56,6 @@ const PRECISION = {
   Bono_DuzeltilmisHc1_Sm3: 0,
   Bono_HataDmemisHc1_m3: 0,
   Bono_HataDmisHc1_Sm3: 0,
-
   Kobe_Petniz_Basinc_Bar: 3,
   Kobe_Petniz_Sicaklik_DegC: 1,
   Kobe_Petniz_DonusumFaktoru: 2,
@@ -77,9 +69,8 @@ const PRECISION = {
   Kobe_Petniz_HataDmemisHc1_m3: 0,
   Kobe_Petniz_HataDmisHc1_Sm3: 0,
 };
-
 const LIMITS = {
-  Sicak_Su_Basinc_Bar: { min: -10, max: 10 },
+  /* … mevcut LIMITS aynen */ Sicak_Su_Basinc_Bar: { min: -10, max: 10 },
   Bono_Basinc_Bar: { min: -10, max: 10 },
   Kobe_Petniz_Basinc_Bar: { min: -10, max: 10 },
   Sicak_Su_Sicaklik_DegC: { min: -120, max: 120 },
@@ -97,12 +88,12 @@ const LIMITS = {
   Sicak_Su_Z_ZbOrani1_K: { min: -1, max: 1 },
   Bono_Z_ZbOrani1_K: { min: -1, max: 1 },
   Kobe_Petniz_Z_ZbOrani1_K: { min: -1, max: 1 },
-  Sicak_Su_DmemisAkis1_m3h: { min: -10_000, max: 10_000 },
-  Sicak_Su_DuzeltilmisAkis1_Sm3h: { min: -10_000, max: 10_000 },
-  Bono_DmemisAkis1_m3h: { min: -10_000, max: 10_000 },
-  Bono_DuzeltilmisAkis1_Sm3h: { min: -10_000, max: 10000 },
-  Kobe_Petniz_DmemisAkis1_m3h: { min: -10_000, max: 10000 },
-  Kobe_Petniz_DuzeltilmisAkis1_Sm3h: { min: -10_000, max: 10000 },
+  Sicak_Su_DmemisAkis1_m3h: { min: -10000, max: 10000 },
+  Sicak_Su_DuzeltilmisAkis1_Sm3h: { min: -10000, max: 10000 },
+  Bono_DmemisAkis1_m3h: { min: -10000, max: 10000 },
+  Bono_DuzeltilmisAkis1_Sm3h: { min: -10000, max: 10000 },
+  Kobe_Petniz_DmemisAkis1_m3h: { min: -10000, max: 10000 },
+  Kobe_Petniz_DuzeltilmisAkis1_Sm3h: { min: -10000, max: 10000 },
   Sicak_Su_DuzeltilmemisHc1_m3: { min: -1e12, max: 1e12 },
   Sicak_Su_DuzeltilmisHc1_Sm3: { min: -1e12, max: 1e12 },
   Sicak_Su_HataDmemisHc1_m3: { min: -1e12, max: 1e12 },
@@ -118,10 +109,9 @@ const LIMITS = {
 };
 
 export default function makeNaturalGasCounterDataModel(plcConn) {
-  const naturalGasCounterSchema = new mongoose.Schema(
+  const s = new mongoose.Schema(
     {
       DataTime: { type: Date, required: true, index: true },
-
       Sicak_Su_Basinc_Bar: { type: Number },
       Sicak_Su_Sicaklik_DegC: { type: Number },
       Sicak_Su_DonusumFaktoru: { type: Number },
@@ -134,7 +124,6 @@ export default function makeNaturalGasCounterDataModel(plcConn) {
       Sicak_Su_DuzeltilmisHc1_Sm3: { type: Number },
       Sicak_Su_HataDmemisHc1_m3: { type: Number },
       Sicak_Su_HataDmisHc1_Sm3: { type: Number },
-
       Bono_Basinc_Bar: { type: Number },
       Bono_Sicaklik_DegC: { type: Number },
       Bono_DonusumFaktoru: { type: Number },
@@ -147,7 +136,6 @@ export default function makeNaturalGasCounterDataModel(plcConn) {
       Bono_DuzeltilmisHc1_Sm3: { type: Number },
       Bono_HataDmemisHc1_m3: { type: Number },
       Bono_HataDmisHc1_Sm3: { type: Number },
-
       Kobe_Petniz_Basinc_Bar: { type: Number },
       Kobe_Petniz_Sicaklik_DegC: { type: Number },
       Kobe_Petniz_DonusumFaktoru: { type: Number },
@@ -161,29 +149,23 @@ export default function makeNaturalGasCounterDataModel(plcConn) {
       Kobe_Petniz_HataDmemisHc1_m3: { type: Number },
       Kobe_Petniz_HataDmisHc1_Sm3: { type: Number },
     },
-    {
-      collection: "naturalGasCounterData",
-      timestamps: false,
-      versionKey: false,
-      strict: true,
-      minimize: true,
-    }
+    { collection: "naturalGasCounterData", timestamps: false, versionKey: false, strict: true, minimize: true }
   );
 
-  Object.entries(PRECISION).forEach(([path, places]) => {
-    const lim = LIMITS[path] || {};
-    if (naturalGasCounterSchema.path(path)) {
-      naturalGasCounterSchema.path(path).set(sanitizeRound(places, lim.min, lim.max));
+  Object.entries(PRECISION).forEach(([p, places]) => {
+    const lim = LIMITS[p] || {};
+    if (s.path(p)) {
+      s.path(p).set(sanitizeRound(places, lim.min, lim.max));
     }
   });
 
   const MONO_FIELDS = Object.keys(PRECISION).filter((k) => /Hc1|Endex|Counter/i.test(k));
 
-  naturalGasCounterSchema.pre("save", async function (next) {
+  s.pre("save", async function (next) {
     if (!this.isNew) return next();
     const last = await this.constructor.findOne().sort({ DataTime: -1 }).lean();
     if (last) {
-      const paths = Object.keys(naturalGasCounterSchema.paths).filter((p) => p !== "_id" && p !== "DataTime");
+      const paths = Object.keys(s.paths).filter((p) => p !== "_id" && p !== "DataTime");
       for (const p of paths) {
         if (this[p] == null && last[p] != null) {
           this[p] = last[p];
@@ -200,5 +182,5 @@ export default function makeNaturalGasCounterDataModel(plcConn) {
     next();
   });
 
-  return plcConn.models.NaturalGasCounterData || plcConn.model("NaturalGasCounterData", naturalGasCounterSchema, "naturalGasCounterData");
+  return plcConn.models.NaturalGasCounterData || plcConn.model("NaturalGasCounterData", s, "naturalGasCounterData");
 }

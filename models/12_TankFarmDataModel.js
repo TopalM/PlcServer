@@ -1,8 +1,6 @@
-// models/12_TankFarmDataModel.js
 import mongoose from "mongoose";
 
-/** ---------- Helpers (same contract as previous set) ---------- **/
-// Convert input to number or NaN; treat "", "   ", null, undefined as NaN
+// Helpers
 const toNumberOrNaN = (v) => {
   if (v == null) return NaN;
   if (typeof v === "number") return v;
@@ -14,7 +12,6 @@ const toNumberOrNaN = (v) => {
   }
   return NaN;
 };
-
 const clampToRangeOrDrop = (n, min, max) => {
   const x = toNumberOrNaN(n);
   if (!Number.isFinite(x)) return undefined;
@@ -22,23 +19,19 @@ const clampToRangeOrDrop = (n, min, max) => {
   if (max != null && x > max) return undefined;
   return x;
 };
-
-// sayı mı? aralıkta mı? → N ondalığa yuvarla; değilse undefined (fallback devreye girer)
-const sanitizeRound = (places, min, max) => (v) => {
-  const inRange = clampToRangeOrDrop(v, min, max);
-  if (inRange == null) return undefined;
-  const f = 10 ** places;
-  return Math.round(inRange * f) / f;
+const sanitizeRound = (p, min, max) => (v) => {
+  const r = clampToRangeOrDrop(v, min, max);
+  if (r == null) return undefined;
+  const f = 10 ** p;
+  return Math.round(r * f) / f;
 };
-
-// 0/1/2 enum alanlar: geçersizse undefined
 const allowedEnum = (vals) => (v) => {
   if (v == null || (typeof v === "string" && v.trim() === "")) return undefined;
   const n = toNumberOrNaN(v);
   return vals.includes(n) ? n : undefined;
 };
 
-/** ---------- Precision & Limits (from original) ---------- **/
+// Precision & Limits
 const PRECISION = {
   Tank_1_Nonil_Alkol_115m3: 1,
   Tank_2_Iso_Butanol_115m3: 1,
@@ -64,21 +57,20 @@ const PRECISION = {
   Toplam_DOTP_m3: 1,
   Toplam_DOA: 0,
 };
-
 const LIMITS = {
   Tank_1_Nonil_Alkol_115m3: { min: -115, max: 115 },
   Tank_2_Iso_Butanol_115m3: { min: -115, max: 115 },
-  Tank_4_DOTP_115M3_Real: { min: -115_000, max: 115_000 },
-  Tank_5_DOP_132M3_Real: { min: -132_000, max: 132_000 },
-  Tank_6_DOA_115M3_Real: { min: -115_000, max: 115_000 },
-  Tank_7_DBP_115M3_Real: { min: -115_000, max: 115_000 },
+  Tank_4_DOTP_115M3_Real: { min: -115000, max: 115000 },
+  Tank_5_DOP_132M3_Real: { min: -132000, max: 132000 },
+  Tank_6_DOA_115M3_Real: { min: -115000, max: 115000 },
+  Tank_7_DBP_115M3_Real: { min: -115000, max: 115000 },
   Tank_8_WhiteSpirit_65m3: { min: -65, max: 65 },
-  Tank_9_DBP_65M3_Real: { min: -65_000, max: 65_000 },
+  Tank_9_DBP_65M3_Real: { min: -65000, max: 65000 },
   Tank_10_DINP_65m3: { min: -65, max: 65 },
   Tank_11_DIDP_65m3: { min: -65, max: 65 },
-  Tank_12_DBM_65M3_Real: { min: -65_000, max: 65_000 },
-  Tank_13_DBA_65M3_Real: { min: -65_000, max: 65_000 },
-  Tank_14_DOM_65M3_Real: { min: -65_000, max: 65_000 },
+  Tank_12_DBM_65M3_Real: { min: -65000, max: 65000 },
+  Tank_13_DBA_65M3_Real: { min: -65000, max: 65000 },
+  Tank_14_DOM_65M3_Real: { min: -65000, max: 65000 },
   Tank_15_Aritma_65m3: { min: -65, max: 65 },
   Tank_16_N_Butanol_65m3: { min: -65, max: 65 },
   Tank_17_Aritma_350m3: { min: -350, max: 350 },
@@ -86,12 +78,11 @@ const LIMITS = {
   Tank_19_Etil_Hexanol_640m3: { min: -640, max: 640 },
   Tank_20_DOTP_430m3: { min: -430, max: 430 },
   Tank_21_DOTP_430m3: { min: -430, max: 430 },
-  Toplam_DOTP_kg: { min: -600_000, max: 600_000 },
-  Toplam_DOTP_m3: { min: -1_000, max: 1_000 },
-  Toplam_DOA: { min: -600_000, max: 600_000 },
+  Toplam_DOTP_kg: { min: -600000, max: 600000 },
+  Toplam_DOTP_m3: { min: -1000, max: 1000 },
+  Toplam_DOA: { min: -600000, max: 600000 },
 };
 
-/** ---------- Factory ---------- **/
 export default function makeTankFarmDataModel(plcConn) {
   const tankFarmDataSchema = new mongoose.Schema(
     {
@@ -119,7 +110,6 @@ export default function makeTankFarmDataModel(plcConn) {
       Toplam_DOTP_kg: { type: Number },
       Toplam_DOTP_m3: { type: Number },
       Toplam_DOA: { type: Number },
-      // enum'lar
       Tank_6_Vana_165_Tanker: { type: Number, set: allowedEnum([0, 1, 2]) },
       Tank_13_Vana_165_Tanker: { type: Number, set: allowedEnum([0, 1, 2]) },
       Tank_12_Vana_166_Tanker: { type: Number, set: allowedEnum([0, 1, 2]) },
@@ -133,23 +123,16 @@ export default function makeTankFarmDataModel(plcConn) {
       Alkol_Kuzey_Cephe_Priz_ile: { type: Number, set: allowedEnum([0, 1, 2]) },
       Alkol_Guney_Cephe_Priz_ile: { type: Number, set: allowedEnum([0, 1, 2]) },
     },
-    {
-      collection: "tankFarmData",
-      timestamps: false,
-      versionKey: false,
-      strict: true,
-      minimize: true,
-    }
+    { collection: "tankFarmData", timestamps: false, versionKey: false, strict: true, minimize: true }
   );
 
-  Object.entries(PRECISION).forEach(([path, places]) => {
-    const lim = LIMITS[path] || {};
-    if (tankFarmDataSchema.path(path)) {
-      tankFarmDataSchema.path(path).set(sanitizeRound(places, lim.min, lim.max));
+  Object.entries(PRECISION).forEach(([p, places]) => {
+    const lim = LIMITS[p] || {};
+    if (tankFarmDataSchema.path(p)) {
+      tankFarmDataSchema.path(p).set(sanitizeRound(places, lim.min, lim.max));
     }
   });
 
-  // Fallback to previous record for undefined/invalids; strip remaining null/undefined
   tankFarmDataSchema.pre("save", async function (next) {
     if (!this.isNew) return next();
     const last = await this.constructor.findOne().sort({ DataTime: -1 }).lean();

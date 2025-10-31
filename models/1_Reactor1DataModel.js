@@ -1,8 +1,6 @@
-// models/1_Reactor1DataModel.js
 import mongoose from "mongoose";
 
 /** ---------- Yardımcılar ---------- **/
-
 const toNumberOrNaN = (v) => {
   if (v == null) return NaN;
   if (typeof v === "number") return v;
@@ -14,7 +12,6 @@ const toNumberOrNaN = (v) => {
   }
   return NaN;
 };
-
 const clampToRangeOrDrop = (n, min, max) => {
   const x = toNumberOrNaN(n);
   if (!Number.isFinite(x)) return undefined;
@@ -22,22 +19,19 @@ const clampToRangeOrDrop = (n, min, max) => {
   if (max != null && x > max) return undefined;
   return x;
 };
-
 const sanitizeRound = (places, min, max) => (v) => {
   const inRange = clampToRangeOrDrop(v, min, max);
-  if (inRange == null) return undefined; // geçersizse: undefined → pre-save fallback devreye girer
+  if (inRange == null) return undefined;
   const f = 10 ** places;
   return Math.round(inRange * f) / f;
 };
-
 const allowedEnum = (vals) => (v) => {
-  if (v == null || v === "") return undefined; // geçersiz: pre-save fallback
+  if (v == null || v === "") return undefined;
   const n = toNumberOrNaN(v);
   return vals.includes(n) ? n : undefined;
 };
 
 /** ---------- Konfigler ---------- **/
-
 const PRECISION = Object.freeze({
   Temperature: 1,
   SetTemperature: 1,
@@ -59,37 +53,33 @@ const PRECISION = Object.freeze({
   AlcoholFlowmeter: 1,
   ProcessLevel: 0,
 });
-
 const LIMITS = Object.freeze({
   Temperature: { min: -350, max: 350 },
   SetTemperature: { min: -350, max: 350 },
   ColumnTemperature: { min: -350, max: 350 },
   ColumnSetTemperature: { min: -350, max: 350 },
   HeatExchangerOutTemperature: { min: -350, max: 350 },
+  Pressure: { min: -5, max: 5 },
   HotOilInletTemperature: { min: -350, max: 350 },
   HotOilOutletTemperature: { min: -350, max: 350 },
-  Cooling3WayValveRatio: { min: -100, max: 100 },
-  Heating3WayValveRatio: { min: -100, max: 100 },
-  VacuumPumpMaxRatio: { min: -100, max: 100 },
-  Pressure: { min: -5, max: 5 },
   HotOilFlowmeter: { min: -200, max: 200 },
   HotOilFrequence: { min: -60, max: 60 },
   TransferPumpRPM: { min: -5_000, max: 5_000 },
   TransferPumpCurrent: { min: -500, max: 500 },
   MixerRPM: { min: -100, max: 100 },
   MixerCurrent: { min: -500, max: 500 },
+  Cooling3WayValveRatio: { min: -100, max: 100 },
+  Heating3WayValveRatio: { min: -100, max: 100 },
+  VacuumPumpMaxRatio: { min: -100, max: 100 },
   AlcoholFlowmeter: { min: -20_000, max: 20_000 },
   ProcessLevel: { min: -15, max: 15 },
 });
 
 /** ---------- Model Factory ---------- **/
-
 export default function makeReactor1DataModel(plcConn) {
   const reactor1DataSchema = new mongoose.Schema(
     {
       DataTime: { type: Date, required: true, index: true },
-
-      // --- Sayısal alanlar ---
       Temperature: { type: Number },
       SetTemperature: { type: Number },
       ColumnTemperature: { type: Number },
@@ -108,8 +98,6 @@ export default function makeReactor1DataModel(plcConn) {
       Heating3WayValveRatio: { type: Number },
       VacuumPumpMaxRatio: { type: Number },
       AlcoholFlowmeter: { type: Number },
-
-      // --- 0/1/2 enum alanlar ---
       ColorHeating: { type: Number, set: allowedEnum([0, 1, 2]) },
       ColorMixer: { type: Number, set: allowedEnum([0, 1, 2]) },
       ColorVacuum: { type: Number, set: allowedEnum([0, 1, 2]) },
@@ -122,19 +110,12 @@ export default function makeReactor1DataModel(plcConn) {
       ColorFault: { type: Number, set: allowedEnum([0, 1, 2]) },
       ProcessLevel: { type: Number },
     },
-    {
-      collection: "reactor1Data",
-      timestamps: false,
-      versionKey: false,
-      strict: true,
-      minimize: true,
-    }
+    { collection: "reactor1Data", timestamps: false, versionKey: false, strict: true, minimize: true }
   );
 
-  // Sorgu senaryosu için ek index (opsiyonel ama faydalı)
-  reactor1DataSchema.index({ DataTime: -1 });
+  // Ek index yok.
 
-  // 1) numeric setter’lar
+  // numeric setter’lar
   Object.entries(PRECISION).forEach(([path, places]) => {
     const lim = LIMITS[path] || {};
     if (reactor1DataSchema.path(path)) {
@@ -142,35 +123,17 @@ export default function makeReactor1DataModel(plcConn) {
     }
   });
 
-  // 2) pre-save fallback — invalid (undefined) gelen her alanı bir önceki kayıtla doldur
+  // pre-save fallback
   reactor1DataSchema.pre("save", async function (next) {
-    // yalnızca yeni kayıt için
     if (!this.isNew) return next();
-
-    // Son kaydı çek
     const last = await this.constructor.findOne({}, { _id: 0 }).sort({ DataTime: -1 }).lean();
-
     if (last) {
-      // Şemadaki yollar (id ve DataTime hariç)
       const paths = Object.keys(reactor1DataSchema.paths).filter((p) => p !== "_id" && p !== "DataTime");
-
-      for (const p of paths) {
-        // Bu kayıtta alan yoksa (undefined/null) → geçen değerle doldur
-        // Not: setter’lar invalid değerleri zaten undefined yapıyor.
-        if (this[p] == null && last[p] != null) {
-          this[p] = last[p];
-        }
-      }
+      for (const p of paths) if (this[p] == null && last[p] != null) this[p] = last[p];
     }
-
-    // Son güvenlik: null/undefined kalmışsa (ilk kayıt olabilir) — kayıttan düş
-    // Böylece DB’de null/undefined hiç yer almaz.
     Object.keys(this.toObject()).forEach((k) => {
-      if (this[k] == null) {
-        delete this[k];
-      }
+      if (this[k] == null) delete this[k];
     });
-
     next();
   });
 

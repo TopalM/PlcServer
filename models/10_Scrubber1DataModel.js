@@ -1,7 +1,5 @@
-// models/10_Scrubber1DataModel.js
 import mongoose from "mongoose";
 
-// Enum helper: 0/1/2; invalid → undefined (pre-save fallback devreye girer)
 const allowedEnum = (vals) => (v) => {
   if (v == null || v === "") return undefined;
   const n = Number(v);
@@ -24,34 +22,23 @@ export default function makeScrubber1DataModel(plcConn) {
       DolumOtomatik: { type: Number, set: allowedEnum([0, 1, 2]) },
       Ariza: { type: Number, set: allowedEnum([0, 1, 2]) },
     },
-    {
-      collection: "scrubber1Data",
-      timestamps: false,
-      versionKey: false,
-      strict: true,
-      minimize: true,
-    }
+    { collection: "scrubber1Data", timestamps: false, versionKey: false, strict: true, minimize: true }
   );
 
-  scrubber1DataSchema.index({ DataTime: -1 });
+  // Ek index yok.
 
-  // Pre-save: undefined kalan alanları bir önceki kayıtla doldur, yoksa yazma
   scrubber1DataSchema.pre("save", async function (next) {
     if (!this.isNew) return next();
-
     const last = await this.constructor.findOne({}, { _id: 0 }).sort({ DataTime: -1 }).lean();
-
     if (last) {
       const paths = Object.keys(scrubber1DataSchema.paths).filter((p) => p !== "_id" && p !== "DataTime");
       for (const p of paths) {
         if (this[p] == null && last[p] != null) this[p] = last[p];
       }
     }
-
     Object.keys(this.toObject()).forEach((k) => {
       if (this[k] == null) delete this[k];
     });
-
     next();
   });
 

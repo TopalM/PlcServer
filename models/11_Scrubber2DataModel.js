@@ -1,6 +1,4 @@
-// models/11_Scrubber2DataModel.js
 import mongoose from "mongoose";
-
 const allowedEnum = (vals) => (v) => {
   if (v == null || v === "") return undefined;
   const n = Number(v);
@@ -23,33 +21,23 @@ export default function makeScrubber2DataModel(plcConn) {
       DolumOtomatik: { type: Number, set: allowedEnum([0, 1, 2]) },
       Ariza: { type: Number, set: allowedEnum([0, 1, 2]) },
     },
-    {
-      collection: "scrubber2Data",
-      timestamps: false,
-      versionKey: false,
-      strict: true,
-      minimize: true,
-    }
+    { collection: "scrubber2Data", timestamps: false, versionKey: false, strict: true, minimize: true }
   );
 
-  scrubber2DataSchema.index({ DataTime: -1 });
+  // Ek index yok.
 
   scrubber2DataSchema.pre("save", async function (next) {
     if (!this.isNew) return next();
-
     const last = await this.constructor.findOne({}, { _id: 0 }).sort({ DataTime: -1 }).lean();
-
     if (last) {
       const paths = Object.keys(scrubber2DataSchema.paths).filter((p) => p !== "_id" && p !== "DataTime");
       for (const p of paths) {
         if (this[p] == null && last[p] != null) this[p] = last[p];
       }
     }
-
     Object.keys(this.toObject()).forEach((k) => {
       if (this[k] == null) delete this[k];
     });
-
     next();
   });
 

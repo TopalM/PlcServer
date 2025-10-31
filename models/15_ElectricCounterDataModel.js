@@ -1,7 +1,5 @@
-// models/15_ElectricCounterDataModel.js
 import mongoose from "mongoose";
 
-/** ---------- Helpers ---------- **/
 const toNumberOrNaN = (v) => {
   if (v == null) return NaN;
   if (typeof v === "number") return v;
@@ -20,17 +18,16 @@ const clampToRangeOrDrop = (n, min, max) => {
   if (max != null && x > max) return undefined;
   return x;
 };
-const sanitizeRound = (places, min, max) => (v) => {
-  const inRange = clampToRangeOrDrop(v, min, max);
-  if (inRange == null) return undefined;
-  const f = 10 ** places;
-  return Math.round(inRange * f) / f;
+const sanitizeRound = (p, min, max) => (v) => {
+  const r = clampToRangeOrDrop(v, min, max);
+  if (r == null) return undefined;
+  const f = 10 ** p;
+  return Math.round(r * f) / f;
 };
 const isFiniteNumber = (v) => Number.isFinite(toNumberOrNaN(v));
 
-/** ---------- Precision & Limits (from original) ---------- **/
 const PRECISION = {
-  Main_Counter_Counter: 0,
+  /* mevcut */ Main_Counter_Counter: 0,
   Main_Counter_Enductive: 0,
   Main_Counter_Capasitive: 0,
   Main_Counter_L1: 1,
@@ -41,7 +38,6 @@ const PRECISION = {
   Main_Counter_V3: 0,
   Main_Counter_Frequence: 0,
   Main_Counter_Active_Power: 1,
-
   Cooling_Water_Counter: 0,
   Cooling_Water_Enductive: 0,
   Cooling_Water_Capasitive: 0,
@@ -53,7 +49,6 @@ const PRECISION = {
   Cooling_Water_V3: 0,
   Cooling_Water_Frequence: 0,
   Cooling_Water_Active_Power: 1,
-
   Boiler_Room_Counter: 0,
   Boiler_Room_Enductive: 0,
   Boiler_Room_Capasitive: 0,
@@ -65,7 +60,6 @@ const PRECISION = {
   Boiler_Room_V3: 0,
   Boiler_Room_Frequence: 0,
   Boiler_Room_Active_Power: 1,
-
   Stabilizan_Counter: 0,
   Stabilizan_Enductive: 0,
   Stabilizan_Capasitive: 0,
@@ -77,7 +71,6 @@ const PRECISION = {
   Stabilizan_V3: 0,
   Stabilizan_Frequence: 0,
   Stabilizan_Active_Power: 1,
-
   Reactor_6_Counter: 0,
   Reactor_6_Enductive: 0,
   Reactor_6_Capasitive: 0,
@@ -89,7 +82,6 @@ const PRECISION = {
   Reactor_6_V3: 0,
   Reactor_6_Frequence: 0,
   Reactor_6_Active_Power: 1,
-
   Reactor_7_Counter: 0,
   Reactor_7_Enductive: 0,
   Reactor_7_Capasitive: 0,
@@ -101,7 +93,6 @@ const PRECISION = {
   Reactor_7_V3: 0,
   Reactor_7_Frequence: 0,
   Reactor_7_Active_Power: 1,
-
   Hot_Oil_Pump_Counter: 0,
   Hot_Oil_Pump_Enductive: 0,
   Hot_Oil_Pump_Capasitive: 0,
@@ -113,7 +104,6 @@ const PRECISION = {
   Hot_Oil_Pump_V3: 0,
   Hot_Oil_Pump_Frequence: 0,
   Hot_Oil_Pump_Active_Power: 1,
-
   Comfort_Chiller_Counter: 0,
   Comfort_Chiller_Enductive: 0,
   Comfort_Chiller_Capasitive: 0,
@@ -125,7 +115,6 @@ const PRECISION = {
   Comfort_Chiller_V3: 0,
   Comfort_Chiller_Frequence: 0,
   Comfort_Chiller_Active_Power: 1,
-
   Filter_Press_Counter: 0,
   Filter_Press_Enductive: 0,
   Filter_Press_Capasitive: 0,
@@ -137,7 +126,6 @@ const PRECISION = {
   Filter_Press_V3: 0,
   Filter_Press_Frequence: 0,
   Filter_Press_Active_Power: 1,
-
   Scrubber_1_Counter: 0,
   Scrubber_1_Enductive: 0,
   Scrubber_1_Capasitive: 0,
@@ -149,7 +137,6 @@ const PRECISION = {
   Scrubber_1_V3: 0,
   Scrubber_1_Frequence: 0,
   Scrubber_1_Active_Power: 1,
-
   Scrubber_2_Counter: 0,
   Scrubber_2_Enductive: 0,
   Scrubber_2_Capasitive: 0,
@@ -161,7 +148,6 @@ const PRECISION = {
   Scrubber_2_V3: 0,
   Scrubber_2_Frequence: 0,
   Scrubber_2_Active_Power: 1,
-
   Tank_Farm_Counter: 0,
   Tank_Farm_Enductive: 0,
   Tank_Farm_Capasitive: 0,
@@ -173,7 +159,6 @@ const PRECISION = {
   Tank_Farm_V3: 0,
   Tank_Farm_Frequence: 0,
   Tank_Farm_Active_Power: 1,
-
   Production_Chiller_Counter: 0,
   Production_Chiller_Enductive: 0,
   Production_Chiller_Capasitive: 0,
@@ -185,7 +170,6 @@ const PRECISION = {
   Production_Chiller_V3: 0,
   Production_Chiller_Frequence: 0,
   Production_Chiller_Active_Power: 1,
-
   Treatment_Counter: 0,
   Treatment_Enductive: 0,
   Treatment_Capasitive: 0,
@@ -197,7 +181,6 @@ const PRECISION = {
   Treatment_V3: 0,
   Treatment_Frequence: 0,
   Treatment_Active_Power: 1,
-
   Others_Counter: 0,
   Others_Enductive: 0,
   Others_Capasitive: 0,
@@ -209,7 +192,6 @@ const PRECISION = {
   Others_V3: 0,
   Others_Frequence: 0,
   Others_Active_Power: 1,
-
   Kobe_Main_Counter: 0,
   Kobe_Main_Enductive: 0,
   Kobe_Main_Capasitive: 0,
@@ -221,7 +203,6 @@ const PRECISION = {
   Kobe_Main_V3: 0,
   Kobe_Main_Frequence: 0,
   Kobe_Main_Active_Power: 1,
-
   Kobe_Boiler_Room_Counter: 0,
   Kobe_Boiler_Room_Enductive: 0,
   Kobe_Boiler_Room_Capasitive: 0,
@@ -233,7 +214,6 @@ const PRECISION = {
   Kobe_Boiler_Room_V3: 0,
   Kobe_Boiler_Room_Frequence: 0,
   Kobe_Boiler_Room_Active_Power: 1,
-
   Kobe_Fan_Counter: 0,
   Kobe_Fan_Enductive: 0,
   Kobe_Fan_Capasitive: 0,
@@ -245,15 +225,11 @@ const PRECISION = {
   Kobe_Fan_V3: 0,
   Kobe_Fan_Frequence: 0,
   Kobe_Fan_Active_Power: 1,
-
-  // --- ADDED: Transformer temperatures (1 decimal place)
   Transformator_Temp1: 1,
   Transformator_Temp2: 1,
   Transformator_Temp3: 1,
   Transformator_Temp_Room: 1,
 };
-
-// Limits computed programmatically (same as original intent)
 const LIMITS = {};
 const groups = [
   "Cooling_Water",
@@ -282,15 +258,12 @@ for (const g of groups) {
   for (const p of ["L1", "L2", "L3", "Active_Power"]) LIMITS[`${g}_${p}`] = { min: 0, max: 2000 };
   for (const p of ["Counter", "Enductive", "Capasitive"]) LIMITS[`${g}_${p}`] = { min: 0, max: 1e9 };
 }
-// Main special
 for (const p of ["L1", "L2", "L3", "Active_Power"]) LIMITS[`Main_Counter_${p}`] = { min: 0, max: 2000 };
 LIMITS["Main_Counter_V1"] = { min: 0, max: 40000 };
 LIMITS["Main_Counter_V2"] = { min: 0, max: 40000 };
 LIMITS["Main_Counter_V3"] = { min: 0, max: 40000 };
 for (const p of ["Counter", "Enductive", "Capasitive"]) LIMITS[`Main_Counter_${p}`] = { min: 0, max: 1e10 };
 LIMITS["Main_Counter_Frequence"] = { min: 0, max: 60 };
-
-// --- ADDED: Transformer temperature safety ranges
 LIMITS["Transformator_Temp1"] = { min: -200, max: 200 };
 LIMITS["Transformator_Temp2"] = { min: -200, max: 200 };
 LIMITS["Transformator_Temp3"] = { min: -200, max: 200 };
@@ -332,7 +305,6 @@ export default function makeElectricCounterDataModel(plcConn) {
           [`${group}_Frequence`, { type: Number }],
           [`${group}_Active_Power`, { type: Number }],
         ])
-        // --- ADDED: Transformer temps to schema
         .concat([
           ["Transformator_Temp1", { type: Number }],
           ["Transformator_Temp2", { type: Number }],
@@ -344,11 +316,10 @@ export default function makeElectricCounterDataModel(plcConn) {
     { collection: "electricCounterData", timestamps: false, versionKey: false, strict: true, minimize: true }
   );
 
-  // Attach setters with precision + limits
-  Object.entries(PRECISION).forEach(([path, places]) => {
-    const lim = LIMITS[path] || {};
-    if (electricCounterSchema.path(path)) {
-      electricCounterSchema.path(path).set(sanitizeRound(places, lim.min, lim.max));
+  Object.entries(PRECISION).forEach(([p, places]) => {
+    const lim = LIMITS[p] || {};
+    if (electricCounterSchema.path(p)) {
+      electricCounterSchema.path(p).set(sanitizeRound(places, lim.min, lim.max));
     }
   });
 
