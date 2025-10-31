@@ -1,28 +1,45 @@
+// middlewares/plcWsClient.js
 import WebSocket from "ws";
 import { decryptFromServerBase64 } from "./dataCrypto.js";
 import { pickMapper } from "../models/mappers/index.js";
 import { modelFor } from "./plcModelRouter.js";
 import { setWs, setFlushTimer, setPingTimer, clearPingTimer, getState } from "./state.js";
 
+/** Ortak ayarlar (.env) */
 const { WSS_URL, JSONWEBTOKEN, SNAPSHOT_INTERVAL_MS, DEBUG_FLUSH } = process.env;
+
+/**
+ * Flush aralığı:
+ * - 60.000 ms (1 dk) önerilir. Böylece her dakika kontrol eder,
+ *   sadece 5’in katı dakikalarda yazarız.
+ * - İstersen 300.000 ms (5 dk) da verebilirsin; yine 5’lik yuvarlama yapılır.
+ */
 const SAVE_EVERY_MS = Number(SNAPSHOT_INTERVAL_MS || 60_000);
 
+/** 5 dakikalık slot hedefi */
+const SLOT_MINUTES = 5;
+
+/** Son görülen verileri tutan tampon (her PLC adı için) */
 const lastSeen = new Map();
+/** Son yazılan 5 dk’lık slot anahtarı (aynı slota ikinci kez yazmamak için) */
 const lastFlushedKey = new Map();
 
+/** İç durum */
 let attempts = 0;
 let flushing = false;
 let alive = false;
 
+/** Dışa açık başlatıcı */
 export function startPlcWebsocketListener() {
   if (!WSS_URL) {
     console.error("WSS_URL boş olamaz. .env dosyasını kontrol et.");
     return;
   }
   connect();
-  startFlushLoop();
+  startFlushLoop(); // ilk kurulum
 }
 
+/** Bağlan */
 function connect() {
   const url = new URL(WSS_URL);
   if (JSONWEBTOKEN) url.searchParams.set("token", JSONWEBTOKEN);
@@ -30,8 +47,8 @@ function connect() {
   const ws = new WebSocket(url.toString(), {
     headers: JSONWEBTOKEN ? { Authorization: `Bearer ${JSONWEBTOKEN}` } : undefined,
     perMessageDeflate: false,
-    handshakeTimeout: 10_000,
-    maxPayload: 4 * 1024 * 1024,
+    handshakeTimeout: 10_000, // 10s
+    maxPayload: 4 * 1024 * 1024, // 4MB
   });
 
   setWs(ws);
@@ -41,6 +58,7 @@ function connect() {
     console.log("[PLC-WS] connected");
     alive = true;
 
+    // Heartbeat: 20sn’de bir ping; 20sn içinde pong yoksa kapat
     try {
       const { pingTimer } = getState();
       if (pingTimer) clearInterval(pingTimer);
@@ -49,8 +67,10 @@ function connect() {
       try {
         const { ws: curr } = getState();
         if (!curr || curr.readyState !== WebSocket.OPEN) return;
+
         alive = false;
         curr.ping();
+
         setTimeout(() => {
           if (!alive && curr?.readyState === WebSocket.OPEN) {
             console.warn("[PLC-WS] heartbeat timeout → terminate");
@@ -63,6 +83,7 @@ function connect() {
     }, 20_000);
     setPingTimer(pt);
 
+    // kopma sonrasında flush döngüsü durmuşsa tekrar garantiye al
     ensureFlushLoop();
   });
 
@@ -76,19 +97,25 @@ function connect() {
     try {
       obj = JSON.parse(text);
     } catch {
+      // Bazı kaynaklar düz metin gelebilir
       console.log("[PLC-WS DATA] (text)", text);
       return;
     }
 
+    // Beklenen format:
+    // { timestamp, data: { PLC_TankFarm: {...}, PLC_1: {...}, ... } }
     const ts = obj?.timestamp ? new Date(obj.timestamp) : new Date();
     const buckets = obj?.data || {};
     for (const [plcName, payload] of Object.entries(buckets)) {
+      // Mapper + Model
       const mapper = pickMapper(plcName);
       const Model = modelFor(plcName);
       if (!Model) {
         console.warn("[PLC-WS] Model bulunamadı:", plcName);
         continue;
       }
+
+      // Map'lenmiş snapshot'ı tamponla
       const mapped = mapper(payload || {});
       lastSeen.set(plcName, { DataTime: ts, body: mapped, Model });
     }
@@ -96,6 +123,7 @@ function connect() {
 
   ws.on("close", (code, reason) => {
     console.warn("[PLC-WS] closed:", code, reason?.toString?.() || "");
+    // sadece ping timer’ını temizle; flush çalışır kalsın
     clearPingTimer();
     reconnect();
   });
@@ -105,6 +133,7 @@ function connect() {
   });
 }
 
+/** Jitter’lı exponential backoff ile yeniden bağlan */
 function reconnect() {
   attempts += 1;
   const base = Math.min(30_000, 1000 * Math.pow(2, attempts));
@@ -114,13 +143,16 @@ function reconnect() {
   setTimeout(connect, wait);
 }
 
+/** flush döngüsünün kurulu olduğunu garanti et */
 function ensureFlushLoop() {
   const { flushTimer } = getState();
-  if (flushTimer) return;
+  if (flushTimer) return; // zaten çalışıyor
   startFlushLoop();
 }
 
+/** Dakikalık snapshot flush döngüsü (5 dakikalık slotlara hizalı idempotent upsert) */
 function startFlushLoop() {
+  // Zaten kuruluysa tekrar kurma
   const { flushTimer } = getState();
   if (flushTimer) return;
 
@@ -128,23 +160,39 @@ function startFlushLoop() {
     if (flushing) return;
     if (lastSeen.size === 0) return;
 
+    // Yalnızca 5'in katı dakikalarda yaz (ör. 00,05,10, …)
+    const now = new Date();
+    if (now.getMinutes() % SLOT_MINUTES !== 0) {
+      return;
+    }
+
     flushing = true;
     const entries = Array.from(lastSeen.entries());
 
     for (const [plcName, { DataTime, body, Model }] of entries) {
       try {
+        // 5 dakikalık slot başlangıcına yuvarla:
+        // (örn. 13:43:08 → 13:40:00)
         const minuteKey = new Date(DataTime);
         minuteKey.setSeconds(0, 0);
+        const m = minuteKey.getMinutes();
+        minuteKey.setMinutes(Math.floor(m / SLOT_MINUTES) * SLOT_MINUTES);
 
         const key = `${plcName}|${minuteKey.toISOString()}`;
-        if (lastFlushedKey.get(plcName) === key) continue;
+        if (lastFlushedKey.get(plcName) === key) continue; // aynı slota ikinci kez yazma
 
-        await Model.updateOne({ DataTime: minuteKey }, { $set: { DataTime: minuteKey, ...body } }, { upsert: true });
+        // Idempotent: Upsert (slot başına tek kayıt)
+        await Model.updateOne(
+          { DataTime: minuteKey }, // aynı 5 dk’lık slota tek kayıt
+          { $set: { DataTime: minuteKey, ...body } },
+          { upsert: true }
+        );
 
         lastFlushedKey.set(plcName, key);
 
+        // İsteğe bağlı debug
         if (DEBUG_FLUSH === "1") {
-          console.log(`[FLUSH] ${plcName} @ ${minuteKey.toISOString()}`);
+          console.log(`[FLUSH 5m] ${plcName} @ ${minuteKey.toISOString()}`);
         }
       } catch (e) {
         console.error(`[FLUSH ERR] ${plcName}:`, e?.message || e);
