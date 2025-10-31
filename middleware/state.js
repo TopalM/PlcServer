@@ -1,5 +1,4 @@
-// middleware/state.js
-// WS ve timer referanslarını tek yerden yönetmek için küçük bir “state” modülü.
+// middlewares/state.js
 
 let ws = null;
 let flushTimer = null;
@@ -19,13 +18,24 @@ export function getState() {
   return { ws, flushTimer, pingTimer };
 }
 
-export function clearTimers() {
-  try {
-    if (flushTimer) clearInterval(flushTimer);
-  } catch {}
+// --- sadece ping timer'ını temizle
+export function clearPingTimer() {
   try {
     if (pingTimer) clearInterval(pingTimer);
   } catch {}
-  flushTimer = null;
   pingTimer = null;
+}
+
+// --- sadece flush timer'ını temizle (şu an plcWsClient bunu çağırmıyor, ama lazım olabilir)
+export function clearFlushTimer() {
+  try {
+    if (flushTimer) clearInterval(flushTimer);
+  } catch {}
+  flushTimer = null;
+}
+
+// --- hepsini temizle (shutdown için)
+export function clearTimers() {
+  clearPingTimer();
+  clearFlushTimer();
 }

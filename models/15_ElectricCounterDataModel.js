@@ -1,3 +1,4 @@
+// models/15_ElectricCounterDataModel.js
 import mongoose from "mongoose";
 
 /** ---------- Helpers ---------- **/

@@ -1,3 +1,4 @@
+// models/10_Scrubber1DataModel.js
 import mongoose from "mongoose";
 
 // Enum helper: 0/1/2; invalid → undefined (pre-save fallback devreye girer)

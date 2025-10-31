@@ -1,4 +1,4 @@
-// Database/sync.js
+//database/sync.js
 import mongoose from "mongoose";
 
 import Reactor1Factory from "../models/1_Reactor1DataModel.js";

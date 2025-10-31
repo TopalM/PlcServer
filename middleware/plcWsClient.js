@@ -1,12 +1,18 @@
-// middleware/plcWsClient.js
+// middlewares/plcWsClient.js
 import WebSocket from "ws";
 import { decryptFromServerBase64 } from "./dataCrypto.js";
 import { pickMapper } from "../models/mappers/index.js";
 import { modelFor } from "./plcModelRouter.js";
-import { setWs, setFlushTimer, setPingTimer, clearTimers, getState } from "./state.js";
+import {
+  setWs,
+  setFlushTimer,
+  setPingTimer,
+  clearPingTimer, // yalnızca ping'i temizleyeceğiz
+  getState,
+} from "./state.js";
 
 /** Ortak ayarlar (.env) */
-const { WSS_URL, JSONWEBTOKEN, SNAPSHOT_INTERVAL_MS } = process.env;
+const { WSS_URL, JSONWEBTOKEN, SNAPSHOT_INTERVAL_MS, DEBUG_FLUSH } = process.env;
 const SAVE_EVERY_MS = Number(SNAPSHOT_INTERVAL_MS || 60_000);
 
 /** Son görülen verileri tutan tampon (her PLC adı için) */
@@ -26,7 +32,7 @@ export function startPlcWebsocketListener() {
     return;
   }
   connect();
-  startFlushLoop();
+  startFlushLoop(); // ilk kurulum
 }
 
 /** Bağlan */
@@ -50,7 +56,8 @@ function connect() {
 
     // Heartbeat: 20sn’de bir ping; 20sn içinde pong yoksa kapat
     try {
-      if (getState().pingTimer) clearInterval(getState().pingTimer);
+      const { pingTimer } = getState();
+      if (pingTimer) clearInterval(pingTimer);
     } catch {}
     const pt = setInterval(() => {
       try {
@@ -71,6 +78,9 @@ function connect() {
       } catch {}
     }, 20_000);
     setPingTimer(pt);
+
+    // kopma sonrasında flush döngüsü durmuşsa tekrar garantiye al
+    ensureFlushLoop();
   });
 
   ws.on("pong", () => {
@@ -109,8 +119,8 @@ function connect() {
 
   ws.on("close", (code, reason) => {
     console.warn("[PLC-WS] closed:", code, reason?.toString?.() || "");
-    // ping timer’ı temizle
-    clearTimers();
+    // sadece ping timer’ını temizle; flush çalışır kalsın
+    clearPingTimer();
     reconnect();
   });
 
@@ -129,12 +139,18 @@ function reconnect() {
   setTimeout(connect, wait);
 }
 
+/** flush döngüsünün kurulu olduğunu garanti et */
+function ensureFlushLoop() {
+  const { flushTimer } = getState();
+  if (flushTimer) return; // zaten çalışıyor
+  startFlushLoop();
+}
+
 /** Dakikalık snapshot flush döngüsü (idempotent upsert) */
 function startFlushLoop() {
-  // Eski timer varsa temizle
-  try {
-    if (getState().flushTimer) clearInterval(getState().flushTimer);
-  } catch {}
+  // Zaten kuruluysa tekrar kurma
+  const { flushTimer } = getState();
+  if (flushTimer) return;
 
   const t = setInterval(async () => {
     if (flushing) return;
@@ -160,8 +176,11 @@ function startFlushLoop() {
         );
 
         lastFlushedKey.set(plcName, key);
-        // İstersen debug aç:
-        // console.log(`[FLUSH] ${plcName} @ ${minuteKey.toISOString()}`);
+
+        // İsteğe bağlı debug
+        if (DEBUG_FLUSH === "1") {
+          console.log(`[FLUSH] ${plcName} @ ${minuteKey.toISOString()}`);
+        }
       } catch (e) {
         console.error(`[FLUSH ERR] ${plcName}:`, e?.message || e);
       }
@@ -172,3 +191,5 @@ function startFlushLoop() {
 
   setFlushTimer(t);
 }
+
+export { startFlushLoop }; // ensureFlushLoop/testler için

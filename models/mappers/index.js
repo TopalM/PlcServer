@@ -1,8 +1,4 @@
-// middlewares/mappers/index.js
-/**
- * Her PLC kaynağı için gelen ham JSON'u ilgili modele uygun objeye çevirir.
- * Modellerde zaten setter/limit/fallback var; burada sadece tip/alan adı uyumu yapılır.
- */
+// models/mappers/index.js
 
 const toNum = (v) => (typeof v === "boolean" ? (v ? 1 : 0) : v ?? null);
 const boolTo01 = (v) => (v === true ? 1 : v === false ? 0 : v);

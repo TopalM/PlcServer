@@ -1,6 +1,5 @@
+// models/2_Reactor2DataModel.js
 import mongoose from "mongoose";
-
-/** ---------- Helpers ---------- **/
 
 // Convert input to number or NaN; treat "", "   ", null, undefined as NaN
 const toNumberOrNaN = (v) => {
